@@ -18,7 +18,7 @@ local bordercolors = {
             { type = "gate", color = "ef39c2" },
             { type = "stitch", color = "ffffff" },
             { type = "inferno", color = "f50a1c" },
-            { type = "nightmare", color = "535353" },
+            { type = "nightmare", color = "808080" },
         },
     },
 }

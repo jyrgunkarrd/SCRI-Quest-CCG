@@ -23,4 +23,16 @@ function Input.mousemoved(scene, x, y, dx, dy, istouch)
     end
 end
 
+function Input.mousepressed(scene, x, y, button, istouch, presses)
+    if scene and scene.mousepressed then
+        scene.mousepressed(x, y, button, istouch, presses)
+    end
+end
+
+function Input.mousereleased(scene, x, y, button, istouch, presses)
+    if scene and scene.mousereleased then
+        scene.mousereleased(x, y, button, istouch, presses)
+    end
+end
+
 return Input

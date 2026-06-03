@@ -2,7 +2,7 @@ local CardStyle = require("src.cards.card_style")
 local CardView = require("src.cards.card_view")
 local Panels = require("src.ui.panels")
 local Pixel = require("src.pixel")
-local mockCards = require("data.mockcard")
+local cards = require("data.cards.index")
 
 local Mockup = {}
 
@@ -36,7 +36,7 @@ function Mockup.draw()
     local startX = Pixel.snap((width - gridWidth) / 2)
     local startY = Pixel.snap((height - gridHeight) / 2)
 
-    for i, card in ipairs(mockCards) do
+    for i, card in ipairs(cards) do
         if i > columns * rows then
             break
         end
@@ -54,7 +54,7 @@ function Mockup.draw()
 
     love.graphics.setFont(assets.fonts.small)
     love.graphics.setColor(0.5, 0.8, 1, 0.85)
-    love.graphics.print("temporary mockup scene - mockcard.lua grid", 64, height - 56)
+    love.graphics.print("temporary mockup scene - data/cards grid", 64, height - 56)
 end
 
 function Mockup.keypressed(_key)

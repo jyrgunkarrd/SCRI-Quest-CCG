@@ -1,13 +1,20 @@
 local Assets = {
+    audio = {
+        sfx = {},
+    },
     fonts = {},
     images = {
         methods = {},
         signature = {},
         cards = {
+            agents = {},
             mockup = {},
         },
+        portraits = {},
     },
 }
+
+local Sfx = require("src.audio.sfx")
 
 local function loadFont(path, size)
     if love.filesystem.getInfo(path) then
@@ -48,6 +55,25 @@ local function loadPortraitImage(path)
     return image
 end
 
+local function getFileStem(filename)
+    return filename:match("^(.*)%.[^%.]+$") or filename
+end
+
+local function loadImageDirectory(directory, target)
+    if not love.filesystem.getInfo(directory) then
+        return
+    end
+
+    for _, filename in ipairs(love.filesystem.getDirectoryItems(directory)) do
+        local path = directory .. "/" .. filename
+        local info = love.filesystem.getInfo(path)
+
+        if info and info.type == "file" and filename:match("%.png$") then
+            target[getFileStem(filename)] = loadPortraitImage(path)
+        end
+    end
+end
+
 function Assets.load()
     Assets.fonts.default = loadFont("assets/fonts/Furore.otf", 56)
     Assets.fonts.title = loadFont("assets/fonts/Furore.otf", 42)
@@ -62,6 +88,12 @@ function Assets.load()
     love.graphics.setFont(Assets.fonts.default)
 
     Assets.images.cards.mockup.front = loadPortraitImage("assets/images/cards/mockup/MCKVIS.png")
+    loadImageDirectory("assets/images/cards/agents", Assets.images.cards.agents)
+    loadImageDirectory("assets/images/portraits", Assets.images.portraits)
+
+    for name, image in pairs(Assets.images.portraits) do
+        Assets.images.portraits[string.upper(name)] = Assets.images.portraits[string.upper(name)] or image
+    end
 
     local methodNames = {
         "beast",
@@ -85,6 +117,9 @@ function Assets.load()
     for _, name in ipairs(signatureNames) do
         Assets.images.signature[name] = loadBadgeImage("assets/images/signature/" .. name .. ".png")
     end
+
+    Assets.audio.sfx.cardHover = Sfx.load("assets/audio/cardhover.wav")
+    Assets.audio.sfx.reject = Sfx.load("assets/audio/reject.wav")
 end
 
 return Assets

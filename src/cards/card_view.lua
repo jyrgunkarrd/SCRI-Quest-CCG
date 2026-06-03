@@ -85,6 +85,46 @@ end
 
 local methodColorMap = getMethodColorMap()
 
+local function getWrappedTextHeight(text, maxWidth, font)
+    local _, lines = font:getWrap(text, math.max(1, maxWidth))
+
+    return math.max(1, #lines) * font:getHeight()
+end
+
+local function getFittingFontForBox(text, maxWidth, maxHeight, fonts)
+    for _, font in ipairs(fonts) do
+        if font:getWidth(text) <= maxWidth and getWrappedTextHeight(text, maxWidth, font) <= maxHeight then
+            return font
+        end
+    end
+
+    for _, font in ipairs(fonts) do
+        if getWrappedTextHeight(text, maxWidth, font) <= maxHeight then
+            return font
+        end
+    end
+
+    return fonts[#fonts]
+end
+
+local function getFittingFontForWrappedHeight(text, maxWidth, maxHeight, fonts)
+    for _, font in ipairs(fonts) do
+        if getWrappedTextHeight(text, maxWidth, font) <= maxHeight then
+            return font
+        end
+    end
+
+    return fonts[#fonts]
+end
+
+local function getCardPortraitImage(card, assets)
+    if card.type == "Agent" and assets.images.cards.agents[card.id] then
+        return assets.images.cards.agents[card.id]
+    end
+
+    return assets.images.cards.mockup.front
+end
+
 local function getCardBorderColor(card)
     local methodEntries = getMethodEntries(card)
 
@@ -149,6 +189,7 @@ function CardView.draw(card, x, y, options)
     options = options or {}
     local assets = options.assets
     local scale = options.scale or 1
+    local statsOnly = options.statsOnly or false
 
     love.graphics.push()
     love.graphics.translate(Pixel.snap(x), Pixel.snap(y))
@@ -176,7 +217,11 @@ function CardView.draw(card, x, y, options)
     local methodIconGap = Style.methodBadge.iconGap
     local methodPad = Style.methodBadge.pad
     local signatureBadgeWidth = methodIconSize + methodPad * 2
-    local cardBottom = Pixel.snap(badgeBodyY + Style.body.baseHeight + Style.framePad)
+    local fullCardBottom = Pixel.snap(badgeBodyY + Style.body.baseHeight + Style.framePad)
+    local statsCardBottom = hasValueBadges
+        and Pixel.snap(healthBadgeY + healthBadgeHeight + Style.framePad)
+        or Pixel.snap(portraitY + portraitSize + Style.framePad)
+    local cardBottom = statsOnly and statsCardBottom or fullCardBottom
     local signatureBadgeX = Pixel.snap(frameX + 8)
     local signatureBadgeY = Pixel.snap(cardBottom - signatureBadgeWidth - 8)
     local bodyBottom = Pixel.snap(signatureBadgeY - 8)
@@ -209,7 +254,7 @@ function CardView.draw(card, x, y, options)
         love.graphics.rectangle("fill", pipX, pipY, Style.cost.pipWidth, pipHeight, 2, 2)
     end
 
-    CardPortrait.drawPortrait(assets.images.cards.mockup.front, portraitX, portraitY, portraitSize, borderColor)
+    CardPortrait.drawPortrait(getCardPortraitImage(card, assets), portraitX, portraitY, portraitSize, borderColor)
 
     local methodEntries = getMethodEntries(card)
     local signatureEntries = {}
@@ -221,13 +266,19 @@ function CardView.draw(card, x, y, options)
     addMethodEntry(signatureEntries, card.sig, 1)
     drawIconBadge(methodEntries, assets.images.methods, portraitX, methodBadgeY, methodIconSize, methodIconGap, methodPad, borderColor, assets.fonts.cardSmall)
 
-    love.graphics.setFont(assets.fonts.body)
+    local nameText = tostring(card.name or "")
+    local nameX = Pixel.snap(portraitX + methodBadgeWidth + 12)
+    local nameWidth = Pixel.snap(portraitSize - methodBadgeWidth - 12)
+    local nameFont = getFittingFontForBox(nameText, nameWidth, methodBadgeHeight, {
+        assets.fonts.body,
+        assets.fonts.small,
+        assets.fonts.cardBody,
+        assets.fonts.cardSmall,
+    })
+
+    love.graphics.setFont(nameFont)
     setColor(Style.colors.headerText)
-    love.graphics.print(
-        card.name,
-        Pixel.snap(portraitX + methodBadgeWidth + 12),
-        Pixel.snap(methodBadgeY + methodBadgeHeight / 2 - assets.fonts.body:getHeight() / 2)
-    )
+    love.graphics.printf(nameText, nameX, Pixel.snap(methodBadgeY + methodBadgeHeight / 2 - getWrappedTextHeight(nameText, nameWidth, nameFont) / 2), nameWidth, "left")
 
     local statGroupWidth = #statBadges * healthBadgeWidth + math.max(0, #statBadges - 1) * Style.valueBadge.statGap
     local statGroupX = Pixel.snap(portraitX + portraitSize - statGroupWidth)
@@ -286,6 +337,11 @@ function CardView.draw(card, x, y, options)
         end
     end
 
+    if statsOnly then
+        love.graphics.pop()
+        return
+    end
+
     setColor(Style.colors.panelFill)
     love.graphics.rectangle("fill", bodyX, bodyY, portraitSize, bodyHeight, 6, 6)
 
@@ -322,9 +378,20 @@ function CardView.draw(card, x, y, options)
         tagX = Pixel.snap(tagX + tagWidth + Style.body.tagGap)
     end
 
-    love.graphics.setFont(assets.fonts.cardBody)
+    local bodyText = tostring(card.body or "")
+    local bodyTextX = bodyX + 22
+    local bodyTextY = bodyY + 56
+    local bodyTextWidth = portraitSize - 44
+    local bodyTextHeight = math.max(1, bodyHeight - 56)
+    local bodyFont = getFittingFontForWrappedHeight(bodyText, bodyTextWidth, bodyTextHeight, {
+        assets.fonts.cardBody,
+        assets.fonts.cardSmall,
+        assets.fonts.cardTiny,
+    })
+
+    love.graphics.setFont(bodyFont)
     setColor(Style.colors.bodyText)
-    love.graphics.printf(card.body or "", bodyX + 22, bodyY + 56, portraitSize - 44, "left")
+    love.graphics.printf(bodyText, bodyTextX, bodyTextY, bodyTextWidth, "left")
 
     love.graphics.setFont(assets.fonts.cardLabel)
     setColor(Style.colors.white)
@@ -337,6 +404,167 @@ function CardView.draw(card, x, y, options)
     )
 
     drawIconBadge(signatureEntries, assets.images.signature, signatureBadgeX, signatureBadgeY, methodIconSize, methodIconGap, methodPad, borderColor, assets.fonts.cardSmall)
+
+    love.graphics.pop()
+end
+
+function CardView.getCompactStatsHeight(scale, assets)
+    scale = scale or 0.5
+
+    local framePad = Pixel.snap(Style.framePad * scale)
+    local portraitSize = Pixel.snap(Style.portraitSize * scale)
+    local headerHeight = math.max(assets.fonts.small:getHeight(), Pixel.snap(Style.methodBadge.iconSize * scale) + Pixel.snap(Style.methodBadge.pad * scale) * 2)
+    local portraitY = framePad + headerHeight + Pixel.snap(20 * scale)
+    local healthHeaderY = portraitY + portraitSize + Pixel.snap(Style.valueBadge.rowGap * scale)
+    local healthBadgeY = healthHeaderY + assets.fonts.cardSmall:getHeight() + Pixel.snap(Style.valueBadge.headerGap * scale)
+    local healthBadgeHeight = Pixel.snap(Style.valueBadge.height * scale) + 5
+
+    return healthBadgeY + healthBadgeHeight + framePad
+end
+
+function CardView.drawCompactStats(card, x, y, options)
+    options = options or {}
+    local assets = options.assets
+    local scale = options.scale or 0.5
+
+    local framePad = Pixel.snap(Style.framePad * scale)
+    local portraitSize = Pixel.snap(Style.portraitSize * scale)
+    local frameWidth = portraitSize + framePad * 2
+    local methodIconSize = Pixel.snap(Style.methodBadge.iconSize * scale)
+    local methodIconGap = math.max(2, Pixel.snap(Style.methodBadge.iconGap * scale))
+    local methodPad = math.max(3, Pixel.snap(Style.methodBadge.pad * scale))
+    local methodBadgeHeight = methodIconSize + methodPad * 2
+    local headerHeight = math.max(assets.fonts.small:getHeight(), methodBadgeHeight)
+    local portraitX = framePad
+    local headerY = framePad
+    local portraitY = framePad + headerHeight + Pixel.snap(20 * scale)
+    local statHeaderY = portraitY + portraitSize + Pixel.snap(Style.valueBadge.rowGap * scale)
+    local statBadgeY = statHeaderY + assets.fonts.cardSmall:getHeight() + Pixel.snap(Style.valueBadge.headerGap * scale)
+    local baseBadgeWidth = Pixel.snap(Style.valueBadge.width * scale) + 4
+    local badgeHeight = Pixel.snap(Style.valueBadge.height * scale) + 5
+    local statGap = math.max(2, Pixel.snap(Style.valueBadge.statGap * scale))
+    local healthBadgeWidth = baseBadgeWidth
+    local healthBadgeX = Pixel.snap(frameWidth - framePad - healthBadgeWidth)
+    local healthBadgeY = headerY
+    local frameHeight = CardView.getCompactStatsHeight(scale, assets)
+    local borderColor = getCardBorderColor(card)
+
+    love.graphics.push()
+    love.graphics.translate(Pixel.snap(x), Pixel.snap(y))
+
+    setColor(Style.colors.frameFill)
+    love.graphics.rectangle("fill", 0, 0, frameWidth, frameHeight, 6, 6)
+
+    love.graphics.setColor(borderColor[1], borderColor[2], borderColor[3], 0.28)
+    love.graphics.setLineWidth(4)
+    love.graphics.rectangle("line", 0, 0, frameWidth, frameHeight, 6, 6)
+
+    setColor(borderColor)
+    love.graphics.setLineWidth(2)
+    love.graphics.rectangle("line", 0, 0, frameWidth, frameHeight, 6, 6)
+
+    local pipCount = card.cost or 0
+    local pipWidth = math.max(5, Pixel.snap(Style.cost.pipWidth * scale))
+    local pipGap = math.max(3, Pixel.snap(Style.cost.pipGap * scale))
+    local pipRowWidth = pipCount * pipWidth + math.max(0, pipCount - 1) * pipGap
+    local pipStartX = Pixel.snap(frameWidth / 2 - pipRowWidth / 2)
+
+    setColor(borderColor)
+    for i = 1, pipCount do
+        love.graphics.rectangle("fill", pipStartX + (i - 1) * (pipWidth + pipGap), 0, pipWidth, Pixel.snap(14 * scale), 2, 2)
+    end
+
+    local methodEntries = getMethodEntries(card)
+    local methodBadgeWidth = drawIconBadge(methodEntries, assets.images.methods, portraitX, headerY, methodIconSize, methodIconGap, methodPad, borderColor, assets.fonts.cardTiny)
+
+    local nameX = Pixel.snap(portraitX + methodBadgeWidth + 7)
+    local nameWidth = Pixel.snap(healthBadgeX - portraitX - methodBadgeWidth - 14)
+    local compactNameText = tostring(card.name or "")
+    local nameFont = getFittingFontForBox(compactNameText, nameWidth, methodBadgeHeight, {
+        assets.fonts.small,
+        assets.fonts.cardBody,
+        assets.fonts.cardSmall,
+        assets.fonts.cardTiny,
+    })
+
+    love.graphics.setFont(nameFont)
+    setColor(Style.colors.headerText)
+    love.graphics.printf(
+        compactNameText,
+        nameX,
+        Pixel.snap(headerY + methodBadgeHeight / 2 - getWrappedTextHeight(compactNameText, nameWidth, nameFont) / 2),
+        nameWidth,
+        "left"
+    )
+
+    CardPortrait.drawPortrait(getCardPortraitImage(card, assets), portraitX, portraitY, portraitSize, borderColor)
+
+    local function drawCompactValueBadge(label, value, exValue, badgeX, labelY, badgeY, badgeWidth)
+        local isSplit = exValue ~= nil
+        local halfWidth = Pixel.snap(badgeWidth / 2)
+        local valueY = Pixel.snap(badgeY + badgeHeight / 2 - assets.fonts.cardLabel:getHeight() / 2)
+
+        if labelY then
+            love.graphics.setFont(assets.fonts.cardSmall)
+            setColor(Style.colors.headerText)
+            love.graphics.printf(label, badgeX, labelY, badgeWidth, "center")
+        end
+
+        if label == "HP" then
+            setColor(Style.colors.valueRed)
+        else
+            setColor(Style.colors.black)
+        end
+
+        if label ~= "HP" and isSplit then
+            love.graphics.rectangle("fill", badgeX, badgeY, halfWidth, badgeHeight, 4, 4)
+
+            setColor(Style.colors.valueRed)
+            love.graphics.rectangle("fill", badgeX + halfWidth, badgeY, badgeWidth - halfWidth, badgeHeight, 4, 4)
+
+            love.graphics.setColor(0.01, 0.015, 0.022, 0.75)
+            love.graphics.rectangle("fill", badgeX + halfWidth - 1, badgeY, 2, badgeHeight)
+        else
+            love.graphics.rectangle("fill", badgeX, badgeY, badgeWidth, badgeHeight, 4, 4)
+        end
+
+        if label ~= "HP" then
+            setColor(Style.colors.valueRed)
+            love.graphics.setLineWidth(2)
+            love.graphics.rectangle("line", badgeX, badgeY, badgeWidth, badgeHeight, 4, 4)
+        end
+
+        love.graphics.setFont(assets.fonts.cardLabel)
+        setColor(Style.colors.white)
+
+        if isSplit then
+            love.graphics.printf(tostring(value or 0), badgeX, valueY, halfWidth, "center")
+            love.graphics.printf(tostring(exValue or 0), badgeX + halfWidth, valueY, badgeWidth - halfWidth, "center")
+        else
+            love.graphics.printf(tostring(value or 0), badgeX, valueY, badgeWidth, "center")
+        end
+    end
+
+    if card.health ~= nil then
+        drawCompactValueBadge("HP", card.health, card.ex or card.healthEx, healthBadgeX, nil, healthBadgeY, healthBadgeWidth)
+    end
+
+    local statBadges = card.statblock or {}
+    local statBadgeWidth = #statBadges > 0
+        and Pixel.snap((portraitSize - math.max(0, #statBadges - 1) * statGap) / #statBadges)
+        or baseBadgeWidth
+
+    for i, stat in ipairs(statBadges) do
+        drawCompactValueBadge(
+            stat.type,
+            stat.value,
+            stat.ex or stat.EX,
+            portraitX + (i - 1) * (statBadgeWidth + statGap),
+            statHeaderY,
+            statBadgeY,
+            statBadgeWidth
+        )
+    end
 
     love.graphics.pop()
 end

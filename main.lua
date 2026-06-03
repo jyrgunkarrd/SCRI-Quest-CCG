@@ -38,3 +38,11 @@ end
 function love.mousemoved(x, y, dx, dy, istouch)
     Input.mousemoved(currentScene, x, y, dx, dy, istouch)
 end
+
+function love.mousepressed(x, y, button, istouch, presses)
+    Input.mousepressed(currentScene, x, y, button, istouch, presses)
+end
+
+function love.mousereleased(x, y, button, istouch, presses)
+    Input.mousereleased(currentScene, x, y, button, istouch, presses)
+end

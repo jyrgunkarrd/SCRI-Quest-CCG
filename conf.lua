@@ -1,0 +1,8 @@
+function love.conf(t)
+    t.window.title = "SCRI MC Game"
+    t.window.width = 1920
+    t.window.height = 1080
+    t.window.fullscreen = true
+    t.window.fullscreentype = "exclusive"
+    t.window.resizable = false
+end

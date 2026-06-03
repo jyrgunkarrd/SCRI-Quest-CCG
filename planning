@@ -1,0 +1,27 @@
+ -There should be space at the bottom of the screen for showing the player's  hand of cards. The cards should be arranged and tileted so that the hand creates a nice, subtle visual arch.
+
+ - The space to the left of the hand should show a stylistic representation of the player's deck; to the right, a stylistic representation of the player's discard pile.
+
+ - directly above the hand should be a UI element that are slots for 3 different player characters, implying a tag team structure for the game. I think this might best be represented as a sort of triangle shape - with the trangle made of 3 diamons,  one dominant central diamond and two lower diamonds on either side of the central one, with the lower halves of the lower diamonds cut off by a masking screen element.  the dominant central diamond would be the active character, the lower diamonds would be characters currently in reserve that could be tagged in.
+
+ - There would need to be a stylish health bar to the left of the character display, and a stylish resource bar (the two bars having a similar enough shape to provide symmetry to the screen) to the right of the character display.
+
+ - The space above the health bar / hunt bar / character display would be the player's play area, which would dominate most of the screen space, where cards would be played to. It would be nice if there was perhaps somekind of angular dynamic to this space, to match the diamond /triangular shapes of the character display.
+
+ - To the left of the central play area would be a diamond representing an environment, and a control bar extending above and below the environment, with the top bar representing adversary control over the environment and the bottom bar representing player control over the environment. To the right of the central play area would be an area that environment cards could be played to. 
+
+ - To topmost  space would be for the boss enemy the player is battling. There would be a central downward pointing triangle whose base extends out of the top of the screen that would represent the boss's portrait slot - similar in size and dimensions to the player's  character element, except the boss is just one large traingle instead of a triangle shape made of diamonds. The boss portrait would have a Phase I and Phase II health bar on either side of it, and the space directly below the boss health bars and portrait would be the space boss cards would be played to. 
+
+ - The layout should have an overally futuristic / cyberpunk vibe and and cyberpunk palette. 
+
+
+
+
+ - Card Name
+ - Card Method (Trigger, Blade, Beast, Rampage, Crusade, Shadow,  Gate, Stitch, Inferno, Nightmare)
+ - Card Cost
+ - Card Signature (Gold,  Lead,  Mercury, Iron, Uranium)
+ - Card Type
+ - Card Tags
+ - Attack (ATK), Op (OPS), Secure (SEC), Defense (DEF)
+ - Health

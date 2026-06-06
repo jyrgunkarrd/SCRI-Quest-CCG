@@ -117,9 +117,23 @@ local function getFittingFontForWrappedHeight(text, maxWidth, maxHeight, fonts)
     return fonts[#fonts]
 end
 
+local function getCardTypeImageFolder(cardType)
+    cardType = cardType and string.lower(tostring(cardType)) or nil
+
+    if not cardType then
+        return nil
+    end
+
+    return cardType .. "s"
+end
+
 local function getCardPortraitImage(card, assets)
-    if card.type == "Agent" and assets.images.cards.agents[card.id] then
-        return assets.images.cards.agents[card.id]
+    local folderName = getCardTypeImageFolder(card and card.type)
+    local images = folderName and assets.images.cards[folderName]
+    local id = card and card.id
+
+    if images and id then
+        return images[id] or images[string.lower(tostring(id))] or images[string.upper(tostring(id))]
     end
 
     return assets.images.cards.mockup.front
@@ -150,6 +164,48 @@ local function drawIconBadge(entries, imageSet, x, y, iconSize, iconGap, pad, bo
     setColor(borderColor)
     love.graphics.setLineWidth(2)
     love.graphics.rectangle("line", x, y, badgeWidth, badgeHeight, 5, 5)
+
+    local iconX = Pixel.snap(x + pad)
+    local iconY = Pixel.snap(y + pad)
+
+    for _, entry in ipairs(entries) do
+        for _ = 1, entry.count do
+            local icon = imageSet[entry.name]
+
+            love.graphics.setColor(borderColor[1], borderColor[2], borderColor[3], 0.18)
+            love.graphics.rectangle("fill", iconX, iconY, iconSize, iconSize, 3, 3)
+
+            if icon then
+                local scale = math.min(iconSize / icon:getWidth(), iconSize / icon:getHeight())
+                local iconWidth = icon:getWidth() * scale
+                local iconHeight = icon:getHeight() * scale
+                local drawX = Pixel.snap(iconX + (iconSize - iconWidth) / 2)
+                local drawY = Pixel.snap(iconY + (iconSize - iconHeight) / 2)
+
+                love.graphics.setColor(1, 1, 1, 1)
+                love.graphics.draw(icon, drawX, drawY, 0, scale, scale)
+            else
+                setColor(borderColor)
+                love.graphics.rectangle("fill", iconX, iconY, iconSize, iconSize, 3, 3)
+                love.graphics.setFont(font)
+                setColor(Style.colors.black)
+                love.graphics.printf(string.sub(entry.name, 1, 1), iconX, iconY + 10, iconSize, "center")
+            end
+
+            iconX = Pixel.snap(iconX + iconSize + iconGap)
+        end
+    end
+
+    return badgeWidth, badgeHeight
+end
+
+local function drawIconBadgeFillOnly(entries, imageSet, x, y, iconSize, iconGap, pad, borderColor, font)
+    local iconCount = countMethodIcons(entries)
+    local badgeWidth = iconCount * iconSize + math.max(0, iconCount - 1) * iconGap + pad * 2
+    local badgeHeight = iconSize + pad * 2
+
+    setColor(Style.colors.panelFill)
+    love.graphics.rectangle("fill", x, y, badgeWidth, badgeHeight, 5, 5)
 
     local iconX = Pixel.snap(x + pad)
     local iconY = Pixel.snap(y + pad)
@@ -565,6 +621,75 @@ function CardView.drawCompactStats(card, x, y, options)
             statBadgeWidth
         )
     end
+
+    love.graphics.pop()
+end
+
+function CardView.drawJaclFrame(card, x, y, size, options)
+    options = options or {}
+
+    local assets = options.assets
+    local frameSize = Pixel.snap(size)
+    local framePad = Pixel.snap(options.framePad or 8)
+    local portraitSize = math.max(1, Pixel.snap(frameSize - framePad * 2))
+    local borderColor = getCardBorderColor(card)
+
+    love.graphics.push()
+    love.graphics.translate(Pixel.snap(x), Pixel.snap(y))
+
+    setColor(Style.colors.frameFill)
+    love.graphics.rectangle("fill", 0, 0, frameSize, frameSize, 6, 6)
+
+    love.graphics.setColor(borderColor[1], borderColor[2], borderColor[3], 0.28)
+    love.graphics.setLineWidth(6)
+    love.graphics.rectangle("line", 0, 0, frameSize, frameSize, 6, 6)
+
+    setColor(borderColor)
+    love.graphics.setLineWidth(2)
+    love.graphics.rectangle("line", 0, 0, frameSize, frameSize, 6, 6)
+
+    CardPortrait.drawPortrait(
+        getCardPortraitImage(card, assets),
+        framePad,
+        framePad,
+        portraitSize,
+        borderColor
+    )
+
+    local methodEntries = getMethodEntries(card)
+    local methodIconSize = math.max(14, Pixel.snap(Style.methodBadge.iconSize * 0.78))
+    local methodIconGap = math.max(2, Pixel.snap(Style.methodBadge.iconGap * 0.7))
+    local methodPad = math.max(4, Pixel.snap(Style.methodBadge.pad * 0.75))
+    local badgeX = Pixel.snap(framePad + 6)
+    local badgeY = Pixel.snap(framePad + 6)
+
+    if #methodEntries > 0 then
+        drawIconBadgeFillOnly(methodEntries, assets.images.methods, badgeX, badgeY, methodIconSize, methodIconGap, methodPad, borderColor, assets.fonts.cardTiny)
+    end
+
+    local nameText = tostring(card.name or "")
+    local nameFont = assets.fonts.cardLabel
+    local namePad = 10
+    local nameHeight = math.max(30, nameFont:getHeight() + 14)
+    local nameWidth = math.min(
+        portraitSize - methodIconSize - methodPad * 2 - namePad * 4,
+        math.max(120, nameFont:getWidth(nameText) + namePad * 2)
+    )
+    local nameX = Pixel.snap(frameSize / 2 - nameWidth / 2)
+    local nameY = Pixel.snap(framePad + 6)
+
+    setColor(Style.colors.panelFill)
+    love.graphics.rectangle("fill", nameX, nameY, nameWidth, nameHeight, 4, 4)
+
+    love.graphics.setFont(nameFont)
+    setColor(Style.colors.headerText)
+    love.graphics.printf(
+        nameText,
+        nameX,
+        Pixel.snap(nameY + nameHeight / 2 - nameFont:getHeight() / 2),
+        nameWidth,
+        "center"
+    )
 
     love.graphics.pop()
 end

@@ -6,6 +6,33 @@ local TagLayout = require("src.battle.tag_layout")
 
 local PlayLayout = {}
 
+local orderedTroopZoneIds = {
+    "upper_left_4",
+    "upper_left_3",
+    "upper_left_2",
+    "upper_left_1",
+    "upper_right_1",
+    "upper_right_2",
+    "upper_right_3",
+    "upper_right_4",
+    "left_4",
+    "left_3",
+    "left_2",
+    "left_1",
+    "right_1",
+    "right_2",
+    "right_3",
+    "right_4",
+}
+
+function PlayLayout.getOrderedTroopZoneIds()
+    return orderedTroopZoneIds
+end
+
+function PlayLayout.isInnerPlayerZone(zoneId)
+    return zoneId == "left_1" or zoneId == "right_1"
+end
+
 function PlayLayout.getCompactCardSize(scale, assets)
     return {
         width = Pixel.snap(CardStyle.width * scale),
@@ -35,8 +62,76 @@ function PlayLayout.getTroopZones(handZone, screenHeight, assets)
     local step = agentRect.width + slotGap
     local leftInnerX = agentRect.x - gap - agentRect.width
     local rightInnerX = agentRect.x + agentRect.width + gap
+    local tabCount = BattleStyle.playZones.tabCount
+    local tabGap = BattleStyle.playZones.tabGap
+    local tabWidth = Pixel.snap((agentRect.width - (tabCount - 1) * tabGap) / tabCount)
+    local upperY = Pixel.snap(agentRect.y - agentRect.height - BattleStyle.playZones.tabTopGap - tabWidth - BattleStyle.playZones.rowGap)
 
     return {
+        upper_left_4 = {
+            id = "upper_left_4",
+            x = Pixel.snap(leftInnerX - step * 3),
+            y = upperY,
+            width = agentRect.width,
+            height = agentRect.height,
+            scale = agentRect.scale,
+        },
+        upper_left_3 = {
+            id = "upper_left_3",
+            x = Pixel.snap(leftInnerX - step * 2),
+            y = upperY,
+            width = agentRect.width,
+            height = agentRect.height,
+            scale = agentRect.scale,
+        },
+        upper_left_2 = {
+            id = "upper_left_2",
+            x = Pixel.snap(leftInnerX - step),
+            y = upperY,
+            width = agentRect.width,
+            height = agentRect.height,
+            scale = agentRect.scale,
+        },
+        upper_left_1 = {
+            id = "upper_left_1",
+            x = Pixel.snap(leftInnerX),
+            y = upperY,
+            width = agentRect.width,
+            height = agentRect.height,
+            scale = agentRect.scale,
+        },
+        upper_right_1 = {
+            id = "upper_right_1",
+            x = Pixel.snap(rightInnerX),
+            y = upperY,
+            width = agentRect.width,
+            height = agentRect.height,
+            scale = agentRect.scale,
+        },
+        upper_right_2 = {
+            id = "upper_right_2",
+            x = Pixel.snap(rightInnerX + step),
+            y = upperY,
+            width = agentRect.width,
+            height = agentRect.height,
+            scale = agentRect.scale,
+        },
+        upper_right_3 = {
+            id = "upper_right_3",
+            x = Pixel.snap(rightInnerX + step * 2),
+            y = upperY,
+            width = agentRect.width,
+            height = agentRect.height,
+            scale = agentRect.scale,
+        },
+        upper_right_4 = {
+            id = "upper_right_4",
+            x = Pixel.snap(rightInnerX + step * 3),
+            y = upperY,
+            width = agentRect.width,
+            height = agentRect.height,
+            scale = agentRect.scale,
+        },
         left_4 = {
             id = "left_4",
             x = Pixel.snap(leftInnerX - step * 3),
@@ -114,14 +209,22 @@ function PlayLayout.hitTestTroopZones(zones, x, y)
     return nil
 end
 
-function PlayLayout.getTabRects(zone)
+function PlayLayout.getAcceptedTypeLabelHeight(zone, assets)
+    if zone.id and zone.id:match("^upper_") then
+        return 0
+    end
+
+    return assets and assets.fonts.cardSmall:getHeight() + 6 or 15
+end
+
+function PlayLayout.getTabRects(zone, assets)
     local rects = {}
     local tabCount = BattleStyle.playZones.tabCount
     local tabGap = BattleStyle.playZones.tabGap
     local totalGap = (tabCount - 1) * tabGap
     local tabWidth = Pixel.snap((zone.width - totalGap) / tabCount)
     local tabHeight = tabWidth
-    local tabY = Pixel.snap(zone.y + zone.height + BattleStyle.playZones.tabTopGap)
+    local tabY = Pixel.snap(zone.y + zone.height + BattleStyle.playZones.tabTopGap + PlayLayout.getAcceptedTypeLabelHeight(zone, assets))
 
     for i = 1, tabCount do
         rects[i] = {
@@ -135,9 +238,9 @@ function PlayLayout.getTabRects(zone)
     return rects
 end
 
-function PlayLayout.hitTestZoneTabs(zones, x, y)
+function PlayLayout.hitTestZoneTabs(zones, x, y, assets)
     for zoneId, zone in pairs(zones) do
-        for tabIndex, rect in ipairs(PlayLayout.getTabRects(zone)) do
+        for tabIndex, rect in ipairs(PlayLayout.getTabRects(zone, assets)) do
             if x >= rect.x and x <= rect.x + rect.width and y >= rect.y and y <= rect.y + rect.height then
                 return zoneId, tabIndex
             end

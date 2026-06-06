@@ -57,7 +57,7 @@ local agents = {
         method = {
             { type = "rampage", value = 1 },
         },
-        cost = 2,
+        cost = 0,
         sig = "hg",
         type = "Agent",
         tags = {

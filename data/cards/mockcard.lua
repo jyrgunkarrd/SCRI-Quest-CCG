@@ -225,7 +225,7 @@ local mockcard = {
         id = "MCKVIS10",
         name = "Visual Mockup",
         method = {
-            { type = "nightmare", value = 1 },
+            { type = "wild", value = 1 },
         },
         cost = 2,
         sig = "pb",

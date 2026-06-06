@@ -1,19 +1,57 @@
 local cards = require("data.cards.index")
 local Animation = require("src.ui.animation")
 local BattleStyle = require("src.battle.battle_style")
+local PlayLayout = require("src.battle.play_layout")
+local ResourceSystem = require("src.battle.resource_system")
+local jaclCards = require("data.jacl")
+local jaclProto = require("data.jaclproto")
+local sigRows = require("data.sigrows")
 
 local BattleState = {}
 BattleState.__index = BattleState
 
-local validPlayZoneIds = {
-    left_1 = true,
-    left_2 = true,
-    left_3 = true,
-    left_4 = true,
-    right_1 = true,
-    right_2 = true,
-    right_3 = true,
-    right_4 = true,
+local function normalizedValue(value)
+    return value and string.lower(tostring(value)) or nil
+end
+
+local validPlayZoneIds = {}
+
+for _, zoneId in ipairs(PlayLayout.getOrderedTroopZoneIds()) do
+    validPlayZoneIds[zoneId] = true
+end
+
+local sigRowById = {}
+
+for _, sigRow in ipairs(sigRows) do
+    sigRowById[string.lower(sigRow.id)] = sigRow
+end
+
+local jaclById = {}
+
+for _, jaclCard in ipairs(jaclCards) do
+    jaclById[normalizedValue(jaclCard.id)] = jaclCard
+end
+
+local jaclIdByAgentId = {}
+
+for _, proto in ipairs(jaclProto) do
+    local agentId = normalizedValue(proto.agent)
+    local jaclId = normalizedValue(proto.jacl or proto.id)
+
+    if agentId and jaclId then
+        jaclIdByAgentId[agentId] = jaclId
+    end
+end
+
+local lowerRowSlotMap = {
+    left_4 = { row = "lrow", slot = "slot1" },
+    left_3 = { row = "lrow", slot = "slot2" },
+    left_2 = { row = "lrow", slot = "slot3" },
+    left_1 = { row = "lrow", slot = "slot4" },
+    right_1 = { row = "rrow", slot = "slot1" },
+    right_2 = { row = "rrow", slot = "slot2" },
+    right_3 = { row = "rrow", slot = "slot3" },
+    right_4 = { row = "rrow", slot = "slot4" },
 }
 
 local mockTags = {
@@ -94,6 +132,10 @@ function BattleState.new(options)
     self.hoverPreviewAnimation = nil
     self.previousHoverPreviewCard = nil
     self.hoverPreviewTransition = nil
+    self.resources = ResourceSystem.new()
+    self.tagActionMode = nil
+    self.activeJaclCard = nil
+    self.jaclSpawnAnimation = nil
     self.tags = options.tags or getAgentTags(self.agentCards)
 
     if #self.tags == 0 then
@@ -102,16 +144,12 @@ function BattleState.new(options)
 
     self.activeTagIndex = options.activeTagIndex or 1
     self.tagSwapAnimation = nil
-    self.playZones = {
-        left_1 = newPlayZone(),
-        left_2 = newPlayZone(),
-        left_3 = newPlayZone(),
-        left_4 = newPlayZone(),
-        right_1 = newPlayZone(),
-        right_2 = newPlayZone(),
-        right_3 = newPlayZone(),
-        right_4 = newPlayZone(),
-    }
+    self.playZones = {}
+
+    for _, zoneId in ipairs(PlayLayout.getOrderedTroopZoneIds()) do
+        self.playZones[zoneId] = newPlayZone()
+    end
+
     self.draggedHandCard = nil
 
     local handSize = options.handSize or 10
@@ -126,6 +164,7 @@ end
 
 function BattleState:update(dt)
     self.hoverPreviewAnimation = Animation.update(self.hoverPreviewAnimation, dt)
+    self.resources:update(dt)
 
     if not self.hoverPreviewAnimation then
         self.previousHoverPreviewCard = nil
@@ -133,6 +172,7 @@ function BattleState:update(dt)
     end
 
     self.tagSwapAnimation = Animation.update(self.tagSwapAnimation, dt)
+    self.jaclSpawnAnimation = Animation.update(self.jaclSpawnAnimation, dt)
 end
 
 function BattleState:rotateTags(direction)
@@ -152,6 +192,86 @@ function BattleState:rotateTags(direction)
     })
 end
 
+function BattleState:setActiveTagIndex(index)
+    local count = #self.tags
+
+    if count == 0 or not index or index < 1 or index > count then
+        return false
+    end
+
+    local previousIndex = self.activeTagIndex
+
+    if previousIndex == index then
+        return true
+    end
+
+    self.activeTagIndex = index
+    self.tagSwapAnimation = Animation.new(BattleStyle.tag.swapDuration, {
+        fromIndex = previousIndex,
+        toIndex = self.activeTagIndex,
+        direction = index > previousIndex and 1 or -1,
+    })
+
+    return true
+end
+
+function BattleState:showGoSilentPrompt()
+    self.tagActionMode = "goSilent"
+end
+
+function BattleState:showGoLoudSelection()
+    self.tagActionMode = "goLoud"
+end
+
+function BattleState:clearTagAction()
+    self.tagActionMode = nil
+end
+
+function BattleState:getJaclCardForAgent(agentCard)
+    local agentId = normalizedValue(agentCard and agentCard.id)
+    local jaclId = agentId and jaclIdByAgentId[agentId]
+
+    return jaclId and jaclById[jaclId] or nil
+end
+
+function BattleState:goLoud(tagIndex)
+    local tag = self.tags[tagIndex]
+
+    if not tag or tagIndex == self.activeTagIndex then
+        return false
+    end
+
+    local jaclCard = self:getJaclCardForAgent(tag.card)
+
+    if not jaclCard then
+        return false
+    end
+
+    self.activeJaclCard = jaclCard
+    self.jaclSpawnAnimation = Animation.new(BattleStyle.jaclFootprint.spawnDelay + BattleStyle.jaclFootprint.spawnDuration)
+    self:setActiveTagIndex(tagIndex)
+    self:clearTagAction()
+
+    return true
+end
+
+function BattleState:getJaclSpawnProgress()
+    if not self.activeJaclCard then
+        return 0
+    end
+
+    local animation = self.jaclSpawnAnimation
+
+    if not animation then
+        return 1
+    end
+
+    local style = BattleStyle.jaclFootprint
+    local elapsed = math.max(0, animation.elapsed - style.spawnDelay)
+
+    return Animation.easeOutCubic(math.min(1, elapsed / style.spawnDuration))
+end
+
 function BattleState:getActiveAgentCard()
     local activeTag = self.tags[self.activeTagIndex]
 
@@ -160,6 +280,75 @@ function BattleState:getActiveAgentCard()
     end
 
     return activeTag.card
+end
+
+function BattleState:getSlotSignatureSourceCard()
+    return self.activeJaclCard or self:getActiveAgentCard()
+end
+
+function BattleState:getActiveSlotSig()
+    local sourceCard = self:getSlotSignatureSourceCard()
+
+    return sourceCard and sourceCard.sig or nil
+end
+
+function BattleState:getActiveSigRow()
+    local sig = self:getActiveSlotSig()
+
+    if not sig then
+        return nil
+    end
+
+    return sigRowById[string.lower(sig)]
+end
+
+function BattleState:getPlayZoneAcceptedType(zoneId)
+    local lowerSlot = lowerRowSlotMap[zoneId]
+
+    if not lowerSlot then
+        return "Troop"
+    end
+
+    local sigRow = self:getActiveSigRow()
+    local row = sigRow and sigRow[lowerSlot.row]
+
+    return row and row[lowerSlot.slot] or "Troop"
+end
+
+function BattleState:getPlayZoneAcceptedSig(zoneId)
+    if not lowerRowSlotMap[zoneId] then
+        return nil
+    end
+
+    return self:getActiveSlotSig()
+end
+
+function BattleState:isPlayZoneVisible(zoneId)
+    return not (self.activeJaclCard and PlayLayout.isInnerPlayerZone(zoneId))
+end
+
+function BattleState:canCardPlayInZone(card, zoneId)
+    local acceptedType = self:getPlayZoneAcceptedType(zoneId)
+    local acceptedSig = self:getPlayZoneAcceptedSig(zoneId)
+    local isSlotCompatible = false
+
+    if not card or not self:isPlayZoneVisible(zoneId) then
+        return false
+    end
+
+    if acceptedSig and normalizedValue(card.sig) == normalizedValue(acceptedSig) then
+        isSlotCompatible = true
+    elseif normalizedValue(acceptedType) == "wild" then
+        isSlotCompatible = true
+    elseif acceptedType and card.type == acceptedType then
+        isSlotCompatible = true
+    end
+
+    if not isSlotCompatible then
+        return false
+    end
+
+    return self.resources:canPayCard(card)
 end
 
 function BattleState:getHandOverflow(viewWidth, cardDisplayWidth, spacing)
@@ -188,7 +377,7 @@ end
 function BattleState:startDraggingHandCard(index, x, y)
     local card = self.hand[index]
 
-    if not card or card.type ~= "Troop" then
+    if not card or card.type == "Agent" then
         return false
     end
 
@@ -220,6 +409,22 @@ function BattleState:cancelDraggingHandCard()
     self.draggedHandCard = nil
 end
 
+function BattleState:discardHandCard(card, conversionOptions)
+    for index, handCard in ipairs(self.hand) do
+        if handCard == card then
+            if not self.resources:discardCard(card, conversionOptions) then
+                return false
+            end
+
+            table.remove(self.hand, index)
+            self:setHoverPreview(nil, nil, nil)
+            return true
+        end
+    end
+
+    return false
+end
+
 function BattleState:dropDraggedHandCard(zoneId)
     local drag = self.draggedHandCard
 
@@ -240,7 +445,7 @@ function BattleState:dropDraggedHandCard(zoneId)
         end
     end
 
-    if card ~= drag.card or card.type ~= "Troop" then
+    if card ~= drag.card or not self:canCardPlayInZone(card, zoneId) then
         self.draggedHandCard = nil
         return false
     end
@@ -249,6 +454,11 @@ function BattleState:dropDraggedHandCard(zoneId)
     local activeTab = zone.activeTab or 1
 
     if zone.cards[activeTab] then
+        self.draggedHandCard = nil
+        return false
+    end
+
+    if not self.resources:payCard(card) then
         self.draggedHandCard = nil
         return false
     end

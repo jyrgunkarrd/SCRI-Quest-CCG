@@ -102,4 +102,14 @@ function TagLayout.getSlots(state, handZone, screenHeight)
     return mergeAnimatedSlots(sourceSlots, targetSlots, Animation.easedProgress(animation))
 end
 
+function TagLayout.getActionYOffset(state, slot)
+    if not state or state.tagActionMode ~= "goLoud" or not slot or slot.isActive then
+        return 0
+    end
+
+    local style = BattleStyle.tagAction
+
+    return math.sin(love.timer.getTime() * style.bobSpeed + slot.index * 0.55) * style.bobAmount
+end
+
 return TagLayout

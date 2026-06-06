@@ -74,6 +74,24 @@ local function loadImageDirectory(directory, target)
     end
 end
 
+local function loadCardImageDirectories()
+    local directory = "assets/images/cards"
+
+    if not love.filesystem.getInfo(directory) then
+        return
+    end
+
+    for _, folderName in ipairs(love.filesystem.getDirectoryItems(directory)) do
+        local folderPath = directory .. "/" .. folderName
+        local info = love.filesystem.getInfo(folderPath)
+
+        if info and info.type == "directory" then
+            Assets.images.cards[folderName] = Assets.images.cards[folderName] or {}
+            loadImageDirectory(folderPath, Assets.images.cards[folderName])
+        end
+    end
+end
+
 function Assets.load()
     Assets.fonts.default = loadFont("assets/fonts/Furore.otf", 56)
     Assets.fonts.title = loadFont("assets/fonts/Furore.otf", 42)
@@ -88,7 +106,7 @@ function Assets.load()
     love.graphics.setFont(Assets.fonts.default)
 
     Assets.images.cards.mockup.front = loadPortraitImage("assets/images/cards/mockup/MCKVIS.png")
-    loadImageDirectory("assets/images/cards/agents", Assets.images.cards.agents)
+    loadCardImageDirectories()
     loadImageDirectory("assets/images/portraits", Assets.images.portraits)
 
     for name, image in pairs(Assets.images.portraits) do
@@ -106,6 +124,7 @@ function Assets.load()
         "shadow",
         "stitch",
         "trigger",
+        "wild",
     }
 
     for _, name in ipairs(methodNames) do
@@ -120,6 +139,11 @@ function Assets.load()
 
     Assets.audio.sfx.cardHover = Sfx.load("assets/audio/cardhover.wav")
     Assets.audio.sfx.reject = Sfx.load("assets/audio/reject.wav")
+    Assets.audio.sfx.resource = Sfx.load("assets/audio/resource.wav")
+    Assets.audio.sfx.cardPlay = Sfx.load("assets/audio/cardplay.wav")
+    Assets.audio.sfx.cardConv = Sfx.load("assets/audio/cardconv.wav")
+    Assets.audio.sfx.swap = Sfx.load("assets/audio/swap.wav")
+    Assets.audio.sfx.click = Sfx.load("assets/audio/click.wav")
 end
 
 return Assets

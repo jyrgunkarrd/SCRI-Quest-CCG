@@ -63,10 +63,16 @@ function MethodColors.getPrimaryMethodName(card)
     return nil
 end
 
+function MethodColors.getColorByName(methodName, fallback)
+    methodName = methodName and string.lower(tostring(methodName)) or nil
+
+    return methodName and methodColorMap[methodName] or fallback or BattleStyle.tag.colors.active
+end
+
 function MethodColors.getCardColor(card, fallback)
     local methodName = MethodColors.getPrimaryMethodName(card)
 
-    return methodName and methodColorMap[methodName] or fallback or BattleStyle.tag.colors.active
+    return MethodColors.getColorByName(methodName, fallback)
 end
 
 return MethodColors

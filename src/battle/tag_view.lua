@@ -36,15 +36,16 @@ local function getTagMethodColor(tag)
     return MethodColors.getCardColor(tag and tag.card, BattleStyle.tag.colors.active)
 end
 
-local function drawSlot(slot, assets)
+local function drawSlot(state, slot, assets)
     local style = BattleStyle.tag
     local pad = style.framePad
     local labelHeight = slot.isActive and style.labelHeight or 0
     local frameWidth = slot.size + pad * 2
     local frameHeight = slot.size + pad * 2 + labelHeight
     local frameX = Pixel.snap(slot.x - pad)
-    local frameY = Pixel.snap(slot.y - pad)
-    local alpha = slot.isActive and 1 or 0.72
+    local frameY = Pixel.snap(slot.y - pad + TagLayout.getActionYOffset(state, slot))
+    local isLoudSelectable = state.tagActionMode == "goLoud" and not slot.isActive
+    local alpha = (slot.isActive or isLoudSelectable) and 1 or 0.72
 
     love.graphics.push()
     love.graphics.translate(Pixel.snap(frameX + frameWidth / 2), Pixel.snap(frameY + frameHeight / 2))
@@ -57,7 +58,7 @@ local function drawSlot(slot, assets)
     drawPortraitBackplate(0, 0, frameWidth, frameHeight)
     drawPortraitImage(assets.images.portraits[slot.tag.portrait], pad, pad, slot.size, slot.size, alpha)
 
-    if not slot.isActive then
+    if not slot.isActive and not isLoudSelectable then
         love.graphics.setColor(0.01, 0.018, 0.028, 0.42)
         love.graphics.rectangle("fill", pad, pad, slot.size, slot.size)
     end
@@ -82,7 +83,7 @@ function TagView.draw(state, assets, handZone, screenHeight)
     local slots = TagLayout.getSlots(state, handZone, screenHeight)
 
     for _, slot in ipairs(slots) do
-        drawSlot(slot, assets)
+        drawSlot(state, slot, assets)
     end
 end
 

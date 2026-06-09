@@ -41,6 +41,46 @@ local function getMethodEntries(card)
     return entries
 end
 
+local function getProgressValues(card)
+    local progress = card and card.progress
+
+    if type(progress) ~= "table" then
+        return nil, nil
+    end
+
+    local track = progress.track
+    local limit = progress.limit
+
+    for _, entry in ipairs(progress) do
+        if type(entry) == "table" then
+            track = track or entry.track
+            limit = limit or entry.limit
+        end
+    end
+
+    return track, limit
+end
+
+local function getControlValues(card)
+    local control = card and card.control
+
+    if type(control) ~= "table" then
+        return nil, nil
+    end
+
+    local track = control.track
+    local limit = control.limit
+
+    for _, entry in ipairs(control) do
+        if type(entry) == "table" then
+            track = track or entry.track
+            limit = limit or entry.limit
+        end
+    end
+
+    return track, limit
+end
+
 local function countMethodIcons(entries)
     local total = 0
 
@@ -84,6 +124,9 @@ local function getMethodColorMap()
 end
 
 local methodColorMap = getMethodColorMap()
+local progressColor = { 0.498, 0, 0.714, 1 }
+local controlColor = { 1.0, 0.72, 0.18, 1 }
+local landmarkColor = { 0.757, 1.0, 0.576, 1 }
 
 local function getWrappedTextHeight(text, maxWidth, font)
     local _, lines = font:getWrap(text, math.max(1, maxWidth))
@@ -129,7 +172,7 @@ end
 
 local function getCardPortraitImage(card, assets)
     local folderName = getCardTypeImageFolder(card and card.type)
-    local images = folderName and assets.images.cards[folderName]
+    local images = folderName and (assets.images.cards[folderName] or assets.images.cards[folderName:gsub("s$", "")])
     local id = card and card.id
 
     if images and id then
@@ -140,6 +183,14 @@ local function getCardPortraitImage(card, assets)
 end
 
 local function getCardBorderColor(card)
+    if card and (card.type == "Champion" or card.type == "Objective") then
+        return { 1.0, 0.2, 0.2, 1 }
+    end
+
+    if card and card.type == "Landmark" then
+        return landmarkColor
+    end
+
     local methodEntries = getMethodEntries(card)
 
     for _, entry in ipairs(methodEntries) do
@@ -153,8 +204,60 @@ local function getCardBorderColor(card)
     return Style.colors.fallbackBorder
 end
 
+local function drawTrackedBadge(track, limit, x, y, width, height, font, radius, accentColor, limitTextColor)
+    x = Pixel.snap(x)
+    y = Pixel.snap(y)
+    width = Pixel.snap(width)
+    height = Pixel.snap(height)
+    radius = radius or 4
+    accentColor = accentColor or progressColor
+
+    local hasLimit = limit ~= nil
+    local halfWidth = Pixel.snap(width / 2)
+    local valueY = Pixel.snap(y + height / 2 - font:getHeight() / 2)
+
+    setColor(Style.colors.panelFill)
+    love.graphics.rectangle("fill", x, y, width, height, radius, radius)
+
+    if hasLimit then
+        setColor(accentColor)
+        love.graphics.rectangle("fill", x + halfWidth, y, width - halfWidth, height, radius, radius)
+
+        love.graphics.setColor(0.01, 0.015, 0.022, 0.75)
+        love.graphics.rectangle("fill", x + halfWidth - 1, y, 2, height)
+    end
+
+    setColor(accentColor)
+    love.graphics.setLineWidth(2)
+    love.graphics.rectangle("line", x, y, width, height, radius, radius)
+
+    love.graphics.setFont(font)
+    setColor(Style.colors.white)
+
+    if hasLimit then
+        love.graphics.printf(tostring(track or 0), x, valueY, halfWidth, "center")
+        setColor(limitTextColor or Style.colors.white)
+        love.graphics.printf(tostring(limit), x + halfWidth, valueY, width - halfWidth, "center")
+    else
+        love.graphics.printf(tostring(track or 0), x, valueY, width, "center")
+    end
+end
+
+local function drawProgressBadge(track, limit, x, y, width, height, font, radius)
+    drawTrackedBadge(track, limit, x, y, width, height, font, radius, progressColor)
+end
+
+local function drawControlBadge(track, limit, x, y, width, height, font, radius)
+    drawTrackedBadge(track, limit, x, y, width, height, font, radius, controlColor, Style.colors.black)
+end
+
 local function drawIconBadge(entries, imageSet, x, y, iconSize, iconGap, pad, borderColor, font)
     local iconCount = countMethodIcons(entries)
+
+    if iconCount <= 0 then
+        return 0, 0
+    end
+
     local badgeWidth = iconCount * iconSize + math.max(0, iconCount - 1) * iconGap + pad * 2
     local badgeHeight = iconSize + pad * 2
 
@@ -201,6 +304,11 @@ end
 
 local function drawIconBadgeFillOnly(entries, imageSet, x, y, iconSize, iconGap, pad, borderColor, font)
     local iconCount = countMethodIcons(entries)
+
+    if iconCount <= 0 then
+        return 0, 0
+    end
+
     local badgeWidth = iconCount * iconSize + math.max(0, iconCount - 1) * iconGap + pad * 2
     local badgeHeight = iconSize + pad * 2
 
@@ -255,6 +363,8 @@ function CardView.draw(card, x, y, options)
     local portraitX = Style.portraitX
     local portraitY = Style.portraitY
     local statBadges = card.statblock or {}
+    local progressTrack, progressLimit = getProgressValues(card)
+    local controlTrack, controlLimit = getControlValues(card)
     local hasHealth = card.health ~= nil
     local hasStats = #statBadges > 0
     local hasValueBadges = hasHealth or hasStats
@@ -312,19 +422,40 @@ function CardView.draw(card, x, y, options)
 
     CardPortrait.drawPortrait(getCardPortraitImage(card, assets), portraitX, portraitY, portraitSize, borderColor)
 
+    if progressTrack ~= nil or controlTrack ~= nil then
+        local hasProgress = progressTrack ~= nil
+        local drawBadge = hasProgress and drawProgressBadge or drawControlBadge
+        local badgeTrack = hasProgress and progressTrack or controlTrack
+        local badgeLimit = hasProgress and progressLimit or controlLimit
+
+        drawBadge(
+            badgeTrack,
+            badgeLimit,
+            portraitX + portraitSize - healthBadgeWidth,
+            frameY + 10,
+            healthBadgeWidth,
+            healthBadgeHeight,
+            assets.fonts.body,
+            5
+        )
+    end
+
     local methodEntries = getMethodEntries(card)
     local signatureEntries = {}
     local methodBadgeHeight = methodIconSize + methodPad * 2
     local methodIconCount = countMethodIcons(methodEntries)
-    local methodBadgeWidth = methodIconCount * methodIconSize + math.max(0, methodIconCount - 1) * methodIconGap + methodPad * 2
+    local methodBadgeWidth = methodIconCount > 0
+        and methodIconCount * methodIconSize + math.max(0, methodIconCount - 1) * methodIconGap + methodPad * 2
+        or 0
     local methodBadgeY = Pixel.snap(nameY - 2)
 
     addMethodEntry(signatureEntries, card.sig, 1)
     drawIconBadge(methodEntries, assets.images.methods, portraitX, methodBadgeY, methodIconSize, methodIconGap, methodPad, borderColor, assets.fonts.cardSmall)
 
     local nameText = tostring(card.name or "")
-    local nameX = Pixel.snap(portraitX + methodBadgeWidth + 12)
-    local nameWidth = Pixel.snap(portraitSize - methodBadgeWidth - 12)
+    local nameGap = methodBadgeWidth > 0 and 12 or 0
+    local nameX = Pixel.snap(portraitX + methodBadgeWidth + nameGap)
+    local nameWidth = Pixel.snap(portraitSize - methodBadgeWidth - nameGap)
     local nameFont = getFittingFontForBox(nameText, nameWidth, methodBadgeHeight, {
         assets.fonts.body,
         assets.fonts.small,
@@ -504,6 +635,8 @@ function CardView.drawCompactStats(card, x, y, options)
     local healthBadgeY = headerY
     local frameHeight = CardView.getCompactStatsHeight(scale, assets)
     local borderColor = getCardBorderColor(card)
+    local progressTrack, progressLimit = getProgressValues(card)
+    local controlTrack, controlLimit = getControlValues(card)
 
     love.graphics.push()
     love.graphics.translate(Pixel.snap(x), Pixel.snap(y))
@@ -533,8 +666,9 @@ function CardView.drawCompactStats(card, x, y, options)
     local methodEntries = getMethodEntries(card)
     local methodBadgeWidth = drawIconBadge(methodEntries, assets.images.methods, portraitX, headerY, methodIconSize, methodIconGap, methodPad, borderColor, assets.fonts.cardTiny)
 
-    local nameX = Pixel.snap(portraitX + methodBadgeWidth + 7)
-    local nameWidth = Pixel.snap(healthBadgeX - portraitX - methodBadgeWidth - 14)
+    local nameGap = methodBadgeWidth > 0 and 7 or 0
+    local nameX = Pixel.snap(portraitX + methodBadgeWidth + nameGap)
+    local nameWidth = Pixel.snap(healthBadgeX - portraitX - methodBadgeWidth - nameGap - 7)
     local compactNameText = tostring(card.name or "")
     local nameFont = getFittingFontForBox(compactNameText, nameWidth, methodBadgeHeight, {
         assets.fonts.small,
@@ -601,7 +735,11 @@ function CardView.drawCompactStats(card, x, y, options)
         end
     end
 
-    if card.health ~= nil then
+    if progressTrack ~= nil then
+        drawProgressBadge(progressTrack, progressLimit, healthBadgeX, healthBadgeY, healthBadgeWidth, badgeHeight, assets.fonts.cardLabel, 4)
+    elseif controlTrack ~= nil then
+        drawControlBadge(controlTrack, controlLimit, healthBadgeX, healthBadgeY, healthBadgeWidth, badgeHeight, assets.fonts.cardLabel, 4)
+    elseif card.health ~= nil then
         drawCompactValueBadge("HP", card.health, card.ex or card.healthEx, healthBadgeX, nil, healthBadgeY, healthBadgeWidth)
     end
 

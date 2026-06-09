@@ -144,6 +144,10 @@ function Assets.load()
     Assets.audio.sfx.cardConv = Sfx.load("assets/audio/cardconv.wav")
     Assets.audio.sfx.swap = Sfx.load("assets/audio/swap.wav")
     Assets.audio.sfx.click = Sfx.load("assets/audio/click.wav")
+    Assets.audio.sfx.phaseEnd = Sfx.load("assets/audio/phase_end.wav")
+    Assets.audio.sfx.progress = Sfx.load("assets/audio/progress.wav")
+    Assets.audio.sfx.damage = Sfx.load("assets/audio/damage.wav")
+    Assets.audio.sfx.occupy = Sfx.load("assets/audio/occupy.wav")
 end
 
 return Assets

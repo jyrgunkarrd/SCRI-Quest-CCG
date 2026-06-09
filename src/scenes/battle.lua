@@ -36,6 +36,22 @@ local function playClick()
     Sfx.play(assets.audio.sfx.click)
 end
 
+local function playPhaseEnd()
+    Sfx.play(assets.audio.sfx.phaseEnd)
+end
+
+local function playProgress()
+    Sfx.play(assets.audio.sfx.progress)
+end
+
+local function playDamage()
+    Sfx.play(assets.audio.sfx.damage)
+end
+
+local function playOccupy()
+    Sfx.play(assets.audio.sfx.occupy)
+end
+
 local function playCardHover(suppressSound)
     if suppressSound then
         return
@@ -54,6 +70,18 @@ end
 
 function Battle.update(dt)
     state:update(dt)
+
+    if state:consumeProgressSfxRequest() then
+        playProgress()
+    end
+
+    if state:consumeDamageSfxRequest() then
+        playDamage()
+    end
+
+    if state:consumeOccupySfxRequest() then
+        playOccupy()
+    end
 end
 
 function Battle.draw()
@@ -80,9 +108,20 @@ local function updateHoveredCard(x, y, suppressHoverSound)
     local handZone = Zones.getHandZone(width, height)
     local agentRect = PlayLayout.getAgentCardRect(handZone, height, assets)
     local activeAgentCard = state:getActiveAgentCard()
+    local activeChampionCard = state:getActiveChampionCard()
 
     if BattleView.hitTestActiveJacl(state, handZone, height, assets, x, y) then
         local changed = state:setHoverPreview(state.activeJaclCard, "jacl", "left")
+
+        if changed then
+            playCardHover(suppressHoverSound)
+        end
+
+        return
+    end
+
+    if activeChampionCard and BattleView.hitTestActiveChampion(state, handZone, height, assets, x, y) then
+        local changed = state:setHoverPreview(activeChampionCard, "champion:" .. tostring(state.activeChampionIndex), "left")
 
         if changed then
             playCardHover(suppressHoverSound)
@@ -105,14 +144,14 @@ local function updateHoveredCard(x, y, suppressHoverSound)
 
     for zoneId, zone in pairs(troopZones) do
         if state:isPlayZoneVisible(zoneId) then
-            local zoneState = state.playZones[zoneId]
+            local forceKey = state:getPlayZoneForceKey(zoneId)
 
             for tabIndex, rect in ipairs(PlayLayout.getTabRects(zone, assets)) do
-                local card = zoneState and zoneState.cards[tabIndex]
+                local card = state:getPlayZoneCard(zoneId, tabIndex)
 
                 if card and PlayLayout.hitTestRect(rect, x, y) then
                     local previewSide = (zone.x + zone.width / 2) < width / 2 and "right" or "left"
-                    local key = "play-tab:" .. zoneId .. ":" .. tostring(tabIndex)
+                    local key = "play-tab:" .. forceKey .. ":" .. zoneId .. ":" .. tostring(tabIndex)
                     local changed = state:setHoverPreview(card, key, previewSide)
 
                     if changed then
@@ -127,12 +166,13 @@ local function updateHoveredCard(x, y, suppressHoverSound)
 
     for zoneId, zone in pairs(troopZones) do
         if state:isPlayZoneVisible(zoneId) then
+            local forceKey = state:getPlayZoneForceKey(zoneId)
             local card = state:getPlayZoneCard(zoneId)
 
             if card and PlayLayout.hitTestRect(zone, x, y) then
                 local previewSide = (zone.x + zone.width / 2) < width / 2 and "right" or "left"
                 local zoneState = state.playZones[zoneId]
-                local key = "play:" .. zoneId .. ":" .. tostring(zoneState.activeTab or 1)
+                local key = "play:" .. forceKey .. ":" .. zoneId .. ":" .. tostring(zoneState.activeTab or 1)
                 local changed = state:setHoverPreview(card, key, previewSide)
 
                 if changed then
@@ -156,16 +196,30 @@ local function updateHoveredCard(x, y, suppressHoverSound)
 end
 
 function Battle.keypressed(key)
+    if not state:isDefiancePhase() then
+        return
+    end
+
     if key == "left" then
         scrollHand(BattleStyle.hand.scrollSpeed)
         updateHoveredCard(love.mouse.getPosition())
     elseif key == "right" then
         scrollHand(-BattleStyle.hand.scrollSpeed)
         updateHoveredCard(love.mouse.getPosition())
+    elseif key == "space" then
+        if state:advanceDefiancePhase() then
+            playPhaseEnd()
+        else
+            playReject()
+        end
     end
 end
 
 function Battle.wheelmoved(x, y)
+    if not state:isDefiancePhase() then
+        return
+    end
+
     local delta = 0
 
     if math.abs(x) > math.abs(y) then
@@ -179,16 +233,47 @@ function Battle.wheelmoved(x, y)
 end
 
 function Battle.mousemoved(x, y)
+    if not state:isDefiancePhase() then
+        state:setHoverPreview(nil, nil, nil)
+        return
+    end
+
     state:updateDraggedHandCard(x, y)
     updateHoveredCard(x, y)
 end
 
 function Battle.mousepressed(x, y, button)
+    if not state:isDefiancePhase() then
+        return
+    end
+
     local width = love.graphics.getWidth()
     local height = love.graphics.getHeight()
     local handZone = Zones.getHandZone(width, height)
     local layoutCards = HandLayout.getCards(state, handZone, height)
     local tagAction, tagIndex = BattleView.hitTestTagAction(state, handZone, height, assets, x, y)
+    local deployButtonHit, deployButtonEnabled = BattleView.hitTestJaclDeployAction(state, handZone, height, assets, x, y)
+
+    if state.jaclDeployActionVisible and (button == 1 or button == 2) then
+        if deployButtonHit then
+            if button == 1 and deployButtonEnabled and state:deployAgentFromJacl() then
+                playSwap()
+            elseif button == 1 then
+                playReject()
+            end
+        else
+            state:clearJaclDeployAction()
+        end
+
+        return
+    end
+
+    if button == 1 and BattleView.hitTestPhaseTracker(state, handZone, height, assets, x, y) then
+        state:advanceDefiancePhase()
+        playPhaseEnd()
+
+        return
+    end
 
     if state.tagActionMode then
         if button == 1 and tagAction == "goSilent" then
@@ -208,6 +293,11 @@ function Battle.mousepressed(x, y, button)
     end
 
     if BattleView.hitTestActiveJacl(state, handZone, height, assets, x, y) then
+        if button == 2 then
+            state:showJaclDeployAction()
+            playClick()
+        end
+
         return
     end
 
@@ -276,6 +366,10 @@ function Battle.mousepressed(x, y, button)
 end
 
 function Battle.mousereleased(x, y, button)
+    if not state:isDefiancePhase() then
+        return
+    end
+
     if button ~= 1 then
         return
     end

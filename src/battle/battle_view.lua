@@ -1,4 +1,5 @@
 local BattleStyle = require("src.battle.battle_style")
+local BattleAnimations = require("src.battle.battle_animations")
 local CardStyle = require("src.cards.card_style")
 local CardView = require("src.cards.card_view")
 local HandLayout = require("src.battle.hand_layout")
@@ -23,6 +24,35 @@ local METHOD_ICON_ORDER = {
     "shadow",
     "stitch",
     "trigger",
+}
+
+local PHASES = {
+    "Start",
+    "Defiance",
+    "Sermon",
+    "End",
+}
+
+local UPPER_ZONE_LABELS = {
+    upper_left_4 = "Landmark",
+    upper_left_3 = "Warzone",
+    upper_left_2 = "Shock Forces",
+    upper_left_1 = "Line Forces",
+    upper_right_1 = "Line Forces",
+    upper_right_2 = "Shock Forces",
+    upper_right_3 = "Intel",
+    upper_right_4 = "Objective",
+}
+
+local UPPER_ZONE_COLORS = {
+    upper_left_4 = { 0.757, 1.0, 0.58, 1 },
+    upper_left_3 = { 0.757, 1.0, 0.58, 1 },
+    upper_left_2 = { 1.0, 0.2, 0.2, 1 },
+    upper_left_1 = { 1.0, 0.2, 0.2, 1 },
+    upper_right_1 = { 1.0, 0.2, 0.2, 1 },
+    upper_right_2 = { 1.0, 0.2, 0.2, 1 },
+    upper_right_3 = { 1.0, 0.2, 0.2, 1 },
+    upper_right_4 = { 1.0, 0.2, 0.2, 1 },
 }
 
 local function setColor(color)
@@ -94,6 +124,17 @@ local function drawActiveAgentCard(state, assets, handZone, screenHeight)
     local tagTop = centerY - BattleStyle.tag.radiusY - BattleStyle.tag.activeSize / 2 - BattleStyle.tag.framePad
     local cardX = Pixel.snap(centerX - cardWidth / 2)
     local cardY = Pixel.snap(tagTop - BattleStyle.agentCard.gapAboveTag - compactCardHeight)
+    local rect = {
+        x = cardX,
+        y = cardY,
+        width = cardWidth,
+        height = compactCardHeight,
+        scale = scale,
+    }
+
+    if BattleAnimations.drawHostileSortieAgentImpact(state.hostileSortieAttackAnimation, activeAgentCard, rect, assets) then
+        return
+    end
 
     CardView.drawCompactStats(activeAgentCard, cardX, cardY, {
         assets = assets,
@@ -101,9 +142,58 @@ local function drawActiveAgentCard(state, assets, handZone, screenHeight)
     })
 end
 
-local function drawTroopZoneBackplate(zone, isValidDropTarget)
+local function getChampionCardRect(state, handZone, screenHeight, assets)
+    local activeChampionCard = state:getActiveChampionCard()
+
+    if not activeChampionCard then
+        return nil
+    end
+
+    local agentRect = PlayLayout.getAgentCardRect(handZone, screenHeight, assets)
+    local zones = PlayLayout.getTroopZones(handZone, screenHeight, assets)
+    local upperZone = zones.upper_left_1 or zones.upper_right_1
+    local scale = BattleStyle.championCard.scale
+    local cardWidth = CardStyle.width * scale
+    local compactCardHeight = CardView.getCompactStatsHeight(scale, assets)
+
+    return {
+        x = Pixel.snap(agentRect.x + agentRect.width / 2 - cardWidth / 2),
+        y = upperZone and upperZone.y or Pixel.snap(agentRect.y - compactCardHeight - BattleStyle.playZones.rowGap),
+        width = cardWidth,
+        height = compactCardHeight,
+        scale = scale,
+    }
+end
+
+local function drawActiveChampionCard(state, assets, handZone, screenHeight)
+    local activeChampionCard = state:getActiveChampionCard()
+    local rect = getChampionCardRect(state, handZone, screenHeight, assets)
+
+    if not activeChampionCard or not rect then
+        return
+    end
+
+    local agentRect = PlayLayout.getAgentCardRect(handZone, screenHeight, assets)
+
+    if BattleAnimations.drawHostileSortieChampion(state.hostileSortieAttackAnimation, activeChampionCard, rect, agentRect, assets) then
+        return
+    end
+
+    if BattleAnimations.drawHostileMissionChampion(state.hostileMissionAnimation, activeChampionCard, rect, assets, handZone, screenHeight) then
+        return
+    end
+
+    CardView.drawCompactStats(activeChampionCard, rect.x, rect.y, {
+        assets = assets,
+        scale = rect.scale,
+    })
+end
+
+local function drawTroopZoneBackplate(zone, isValidDropTarget, accentColor)
     local fill = BattleStyle.playZones.emptyFill
-    local stroke = isValidDropTarget and BattleStyle.playZones.validStroke or BattleStyle.playZones.emptyStroke
+    local stroke = isValidDropTarget and BattleStyle.playZones.validStroke
+        or accentColor
+        or BattleStyle.playZones.emptyStroke
 
     love.graphics.setColor(fill)
     love.graphics.rectangle("fill", zone.x, zone.y, zone.width, zone.height, 6, 6)
@@ -124,6 +214,25 @@ local function drawTroopZoneCard(zone, card, assets)
     })
 end
 
+local function drawZoneLabel(zone, label, labelY, labelHeight, assets, textColor, outlineColor)
+    love.graphics.setColor(BattleStyle.playZones.labelFill)
+    love.graphics.rectangle("fill", zone.x, labelY, zone.width, labelHeight, 2, 2)
+
+    love.graphics.setColor(outlineColor or BattleStyle.playZones.emptyStroke)
+    love.graphics.setLineWidth(1)
+    love.graphics.rectangle("line", zone.x, labelY, zone.width, labelHeight, 2, 2)
+
+    love.graphics.setFont(assets.fonts.cardSmall)
+    love.graphics.setColor(textColor or BattleStyle.playZones.tabText)
+    love.graphics.printf(
+        string.upper(label),
+        zone.x,
+        Pixel.snap(labelY + labelHeight / 2 - assets.fonts.cardSmall:getHeight() / 2),
+        zone.width,
+        "center"
+    )
+end
+
 local function drawZoneAcceptedTypeLabel(state, zone, zoneId, assets)
     if zoneId:match("^upper_") then
         return
@@ -138,22 +247,20 @@ local function drawZoneAcceptedTypeLabel(state, zone, zoneId, assets)
     local labelHeight = PlayLayout.getAcceptedTypeLabelHeight(zone, assets)
     local labelY = Pixel.snap(zone.y + zone.height + BattleStyle.playZones.tabTopGap)
 
-    love.graphics.setColor(BattleStyle.playZones.labelFill)
-    love.graphics.rectangle("fill", zone.x, labelY, zone.width, labelHeight, 2, 2)
+    drawZoneLabel(zone, acceptedType, labelY, labelHeight, assets)
+end
 
-    love.graphics.setColor(BattleStyle.playZones.emptyStroke)
-    love.graphics.setLineWidth(1)
-    love.graphics.rectangle("line", zone.x, labelY, zone.width, labelHeight, 2, 2)
+local function drawUpperZoneLabel(zone, zoneId, assets)
+    local label = UPPER_ZONE_LABELS[zoneId]
 
-    love.graphics.setFont(assets.fonts.cardSmall)
-    love.graphics.setColor(BattleStyle.playZones.tabText)
-    love.graphics.printf(
-        string.upper(acceptedType),
-        zone.x,
-        Pixel.snap(labelY + labelHeight / 2 - assets.fonts.cardSmall:getHeight() / 2),
-        zone.width,
-        "center"
-    )
+    if not label then
+        return
+    end
+
+    local labelHeight = assets.fonts.cardSmall:getHeight() + 6
+    local labelY = Pixel.snap(zone.y - labelHeight - BattleStyle.playZones.tabTopGap)
+
+    drawZoneLabel(zone, label, labelY, labelHeight, assets, BattleStyle.playZones.tabText, UPPER_ZONE_COLORS[zoneId])
 end
 
 local function drawZoneSigBadge(state, zone, zoneId, assets)
@@ -206,17 +313,18 @@ local function drawZoneSigBadge(state, zone, zoneId, assets)
     end
 end
 
-local function drawZoneTabs(zone, zoneState, assets)
+local function drawZoneTabs(state, zone, zoneState, zoneId, assets)
     local activeTab = zoneState.activeTab or 1
     local tabRects = PlayLayout.getTabRects(zone, assets)
-    local activeCard = zoneState.cards[activeTab]
+    local zoneCards = state:getPlayZoneCards(zoneId)
+    local activeCard = zoneCards[activeTab]
     local activeColor = MethodColors.getCardColor(activeCard, BattleStyle.playZones.activeTabFill)
 
     love.graphics.setFont(assets.fonts.cardLabel)
 
     for index, rect in ipairs(tabRects) do
         local isActive = index == activeTab
-        local hasCard = zoneState.cards[index] ~= nil
+        local hasCard = zoneCards[index] ~= nil
         local fill = hasCard and not isActive and BattleStyle.playZones.occupiedTabFill or BattleStyle.playZones.tabFill
         local stroke = isActive and activeColor or BattleStyle.playZones.emptyStroke
         local textColor = isActive and activeColor or BattleStyle.playZones.tabText
@@ -251,11 +359,16 @@ local function drawTroopZones(state, assets, handZone, screenHeight)
                 and not activeCard
                 and state:canCardPlayInZone(drag.card, zoneId)
 
-            drawTroopZoneBackplate(zones[zoneId], isValidDropTarget)
+            drawTroopZoneBackplate(zones[zoneId], isValidDropTarget, UPPER_ZONE_COLORS[zoneId])
             drawZoneSigBadge(state, zones[zoneId], zoneId, assets)
             drawTroopZoneCard(zones[zoneId], activeCard, assets)
+            drawUpperZoneLabel(zones[zoneId], zoneId, assets)
             drawZoneAcceptedTypeLabel(state, zones[zoneId], zoneId, assets)
-            drawZoneTabs(zones[zoneId], zoneState, assets)
+            drawZoneTabs(state, zones[zoneId], zoneState, zoneId, assets)
+
+            if state.hostileMissionAnimation and zoneId == state.hostileMissionAnimation.targetZoneId then
+                BattleAnimations.drawHostileMissionObjectiveFlash(state.hostileMissionAnimation, zones[zoneId], assets)
+            end
         end
     end
 end
@@ -348,10 +461,94 @@ local function getResourceBoxRect(state, handZone, screenHeight, assets)
     }
 end
 
+local function getPhaseTrackerRect(state, handZone, screenHeight, assets)
+    local style = BattleStyle.phaseTracker
+    local footprintRect = getJaclFootprintRect(state, handZone, screenHeight, assets)
+    local boxWidth = style.width
+    local boxHeight = style.topHeight + style.phaseHeight + style.pad * 2
+    local x = Pixel.snap(footprintRect.x - boxWidth - style.gapFromFootprint)
+    local y = Pixel.snap(footprintRect.y + footprintRect.height - boxHeight)
+
+    return {
+        x = x,
+        y = y,
+        width = boxWidth,
+        height = boxHeight,
+    }
+end
+
 function BattleView.getResourcePipTarget(state, handZone, screenHeight, assets)
     local rect = getResourceBoxRect(state, handZone, screenHeight, assets)
 
     return rect.pipTargetX, rect.pipTargetY
+end
+
+local function drawPhaseTracker(state, assets, handZone, screenHeight)
+    local style = BattleStyle.phaseTracker
+    local rect = getPhaseTrackerRect(state, handZone, screenHeight, assets)
+    local dividerY = Pixel.snap(rect.y + style.topHeight)
+    local phaseCount = #PHASES
+    local phaseY = Pixel.snap(dividerY + style.pad)
+    local totalGap = style.phaseGap * math.max(0, phaseCount - 1)
+    local phaseWidth = Pixel.snap((rect.width - style.pad * 2 - totalGap) / phaseCount)
+    local phaseIndex = state.phaseIndex or 1
+
+    love.graphics.setColor(style.fill)
+    love.graphics.rectangle("fill", rect.x, rect.y, rect.width, rect.height)
+
+    love.graphics.setColor(style.stroke)
+    love.graphics.setLineWidth(2)
+    love.graphics.rectangle("line", rect.x, rect.y, rect.width, rect.height)
+
+    love.graphics.setColor(style.divider)
+    love.graphics.setLineWidth(1)
+    love.graphics.line(rect.x, dividerY, rect.x + rect.width, dividerY)
+
+    love.graphics.setFont(assets.fonts.cardLabel)
+    love.graphics.setColor(style.text)
+    love.graphics.printf(
+        "ROUND " .. tostring(state.round or 1),
+        rect.x,
+        Pixel.snap(rect.y + style.topHeight / 2 - assets.fonts.cardLabel:getHeight() / 2),
+        rect.width,
+        "center"
+    )
+
+    for index, phaseName in ipairs(PHASES) do
+        local phaseX = Pixel.snap(rect.x + style.pad + (index - 1) * (phaseWidth + style.phaseGap))
+        local isActive = index == phaseIndex
+
+        love.graphics.setColor(isActive and style.activeFill or style.inactiveFill)
+        love.graphics.rectangle("fill", phaseX, phaseY, phaseWidth, style.phaseHeight, 2, 2)
+
+        love.graphics.setColor(isActive and style.activeStroke or style.stroke)
+        love.graphics.setLineWidth(isActive and 2 or 1)
+        love.graphics.rectangle("line", phaseX, phaseY, phaseWidth, style.phaseHeight, 2, 2)
+
+        love.graphics.setFont(assets.fonts.cardSmall)
+        love.graphics.setColor(isActive and style.text or style.mutedText)
+        love.graphics.printf(
+            string.upper(phaseName),
+            phaseX,
+            Pixel.snap(phaseY + style.phaseHeight / 2 - assets.fonts.cardSmall:getHeight() / 2),
+            phaseWidth,
+            "center"
+        )
+    end
+
+    local subPhaseLabel = state.getCurrentSubPhaseLabel and state:getCurrentSubPhaseLabel()
+
+    if subPhaseLabel then
+        love.graphics.setFont(assets.fonts.cardSmall)
+        love.graphics.setColor(style.text)
+        love.graphics.printf(
+            string.upper(subPhaseLabel),
+            rect.x,
+            Pixel.snap(rect.y + rect.height + style.subPhaseGap),
+            rect.width,
+            "center"
+        )
+    end
 end
 
 local function drawResourceBox(state, assets, handZone, screenHeight)
@@ -601,6 +798,45 @@ local function drawJaclFootprint(state, handZone, screenHeight, assets)
     love.graphics.rectangle("line", rect.x, rect.y, rect.width, rect.height)
 end
 
+local function getJaclDeployButtonRect(state, handZone, screenHeight, assets)
+    local style = BattleStyle.jaclAction
+    local rect = getJaclFootprintRect(state, handZone, screenHeight, assets)
+
+    return {
+        x = Pixel.snap(rect.x + rect.width / 2 - style.buttonWidth / 2),
+        y = Pixel.snap(rect.y - style.buttonHeight - style.buttonGap),
+        width = style.buttonWidth,
+        height = style.buttonHeight,
+    }
+end
+
+local function drawJaclDeployAction(state, assets, handZone, screenHeight)
+    if not state.jaclDeployActionVisible or not state.activeJaclCard then
+        return
+    end
+
+    local style = BattleStyle.jaclAction
+    local rect = getJaclDeployButtonRect(state, handZone, screenHeight, assets)
+    local isAvailable = state:isJaclDeployAvailable()
+
+    love.graphics.setColor(isAvailable and style.fill or style.disabledFill)
+    love.graphics.rectangle("fill", rect.x, rect.y, rect.width, rect.height, 4, 4)
+
+    love.graphics.setColor(isAvailable and style.stroke or style.disabledStroke)
+    love.graphics.setLineWidth(2)
+    love.graphics.rectangle("line", rect.x, rect.y, rect.width, rect.height, 4, 4)
+
+    love.graphics.setFont(assets.fonts.cardLabel)
+    love.graphics.setColor(isAvailable and style.text or style.disabledText)
+    love.graphics.printf(
+        "Deploy Agent",
+        rect.x,
+        Pixel.snap(rect.y + rect.height / 2 - assets.fonts.cardLabel:getHeight() / 2),
+        rect.width,
+        "center"
+    )
+end
+
 local function getGoSilentButtonRect(handZone, screenHeight, assets)
     local style = BattleStyle.tagAction
     local agentRect = PlayLayout.getAgentCardRect(handZone, screenHeight, assets)
@@ -651,9 +887,44 @@ function BattleView.hitTestTagAction(state, handZone, screenHeight, assets, x, y
                 return "goLoud", rect.tagIndex
             end
         end
+
+        for _, slot in ipairs(TagLayout.getSlots(state, handZone, screenHeight)) do
+            if not slot.isActive then
+                local yOffset = TagLayout.getActionYOffset(state, slot)
+                local rect = {
+                    x = slot.x,
+                    y = Pixel.snap(slot.y + yOffset),
+                    width = slot.size,
+                    height = slot.size,
+                }
+
+                if hitTestRect(rect, x, y) then
+                    return "goLoud", slot.index
+                end
+            end
+        end
     end
 
     return nil, nil
+end
+
+function BattleView.hitTestPhaseTracker(state, handZone, screenHeight, assets, x, y)
+    return hitTestRect(getPhaseTrackerRect(state, handZone, screenHeight, assets), x, y)
+end
+
+function BattleView.hitTestActiveChampion(state, handZone, screenHeight, assets, x, y)
+    local rect = getChampionCardRect(state, handZone, screenHeight, assets)
+
+    return rect and hitTestRect(rect, x, y) or false
+end
+
+function BattleView.hitTestJaclDeployAction(state, handZone, screenHeight, assets, x, y)
+    if not state.jaclDeployActionVisible or not state.activeJaclCard then
+        return false, false
+    end
+
+    return hitTestRect(getJaclDeployButtonRect(state, handZone, screenHeight, assets), x, y),
+        state:isJaclDeployAvailable()
 end
 
 function BattleView.hitTestActiveJacl(state, handZone, screenHeight, assets, x, y)
@@ -703,9 +974,19 @@ function BattleView.draw(state, assets)
     local layoutCards = HandLayout.getCards(state, handZone, height)
 
     drawTroopZones(state, assets, handZone, height)
-    drawActiveAgentCard(state, assets, handZone, height)
+
+    if state.hostileSortieAttackAnimation then
+        drawActiveAgentCard(state, assets, handZone, height)
+        drawActiveChampionCard(state, assets, handZone, height)
+    else
+        drawActiveChampionCard(state, assets, handZone, height)
+        drawActiveAgentCard(state, assets, handZone, height)
+    end
+
     TagView.draw(state, assets, handZone, height)
     drawTagActionButtons(state, assets, handZone, height)
+    drawJaclDeployAction(state, assets, handZone, height)
+    drawPhaseTracker(state, assets, handZone, height)
     drawResourceBox(state, assets, handZone, height)
 
     for _, layout in ipairs(layoutCards) do

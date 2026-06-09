@@ -118,6 +118,13 @@ function ResourceSystem:clearSelections()
     self.selectedCards = {}
 end
 
+function ResourceSystem:reset()
+    self.selectedCards = {}
+    self.pips = 0
+    self.highlightedMethods = {}
+    self.conversionEffects = {}
+end
+
 function ResourceSystem:isCardSelected(card)
     local key = getSelectionKey(card)
 

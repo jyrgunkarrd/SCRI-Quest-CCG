@@ -60,12 +60,28 @@ local BattleStyle = {
         gapAboveTag = 12,
     },
 
+    championCard = {
+        scale = 0.5,
+    },
+
     jaclFootprint = {
         pad = 4,
         stroke = { 1.0, 0.92, 0.35, 0.78 },
         lineWidth = 2,
         spawnDelay = 0.14,
         spawnDuration = 0.16,
+    },
+
+    jaclAction = {
+        buttonWidth = 154,
+        buttonHeight = 30,
+        buttonGap = 10,
+        fill = { 0.01, 0.018, 0.028, 0.9 },
+        disabledFill = { 0.03, 0.035, 0.04, 0.82 },
+        stroke = { 0.86, 0.94, 1.0, 0.82 },
+        disabledStroke = { 0.42, 0.48, 0.54, 0.62 },
+        text = { 0.86, 0.94, 1.0, 1 },
+        disabledText = { 0.48, 0.54, 0.6, 0.9 },
     },
 
     playZones = {
@@ -106,6 +122,49 @@ local BattleStyle = {
         iconFill = { 0.45, 0.74, 1.0, 0.1 },
         activeIconBobAmount = 3,
         activeIconBobSpeed = 4.5,
+    },
+
+    phaseTracker = {
+        width = 326,
+        topHeight = 34,
+        phaseHeight = 40,
+        autoAdvanceDelay = 0.8,
+        pad = 8,
+        phaseGap = 4,
+        subPhaseGap = 6,
+        gapFromFootprint = 18,
+        fill = { 0.01, 0.018, 0.028, 0.72 },
+        divider = { 0.45, 0.74, 1.0, 0.24 },
+        stroke = { 0.45, 0.74, 1.0, 0.36 },
+        activeFill = { 0.45, 0.74, 1.0, 0.16 },
+        activeStroke = { 0.45, 0.74, 1.0, 0.82 },
+        inactiveFill = { 0.02, 0.04, 0.06, 0.72 },
+        text = { 0.86, 0.94, 1.0, 1 },
+        mutedText = { 0.62, 0.76, 0.88, 0.9 },
+    },
+
+    hostileMissionAction = {
+        duration = 0.9,
+        windupDuration = 0.18,
+        lungeDuration = 0.22,
+        impactHoldDuration = 0.18,
+        returnDuration = 0.22,
+        tilt = -0.1,
+        flashColor = { 1.0, 0.2, 0.2, 1 },
+        flashStroke = { 1.0, 0.92, 0.35, 1 },
+    },
+
+    hostileSortieAttack = {
+        duration = 0.9,
+        windupDuration = 0.18,
+        lungeDuration = 0.22,
+        impactHoldDuration = 0.18,
+        returnDuration = 0.22,
+        tilt = -0.1,
+        flashColor = { 1.0, 0.2, 0.2, 1 },
+        flashStroke = { 1.0, 0.92, 0.35, 1 },
+        jitterAmount = 7,
+        jitterSpeed = 92,
     },
 
     resourceDiscardButton = {

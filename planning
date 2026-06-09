@@ -28,3 +28,19 @@
 
 
 Need JACLs and tag system implementation
+
+Need phase tracker
+
+Set-up enemy side of the board; make sure those slots cannot accept player cards and are not tied to the JACL or Agents.
+
+Set-up enemy behavior / initial deck and objective association with Champion
+
+
+Sermon phase needs sub-phases:
+
+ - Objective progress.
+ - Champion activation -> Uptick Objective, Attack Agent or uptick objective if JACL present, control Landmark
+ - Warzone activation -> Warzone card activates, typically impacting all slots with an event.
+ - Landmark activation -> Play event cards into rearmost tabs of slots -> Play warzone card.
+ - Opposition card(s). -> Play card from Champion deck. 
+
